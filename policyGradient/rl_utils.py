@@ -41,8 +41,8 @@ def moving_average(data, window_size):
     """
     cumulative_sum = np.cumsum(np.insert(data, 0, 0))
     middle = (cumulative_sum[window_size:] - cumulative_sum[:-window_size]) / window_size
-    r = np.arange(1, window_size - 1, 2)
-    begin = np.cumsum(data[:window_size - 1])[::2] / r
+    r = np.arange(1, window_size-1, 2)
+    begin = np.cumsum(data[:window_size-1])[::2] / r
     end = (np.cumsum(data[:-window_size:-1])[::2] / r)[::-1]
     return np.concatenate((begin, middle, end))
 
@@ -98,7 +98,7 @@ def evaluate_agent(env, agent, num_episodes=10):
             state = env.reset()[0]
             episode_reward = 0
             done = False
-            
+
             while not done:
                 action = agent.choose_action(state)
                 next_state, reward, done, _, _ = env.step(action)

@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     # 绘制训练过程的回报曲线 vs. 平滑回报曲线
     episode_list = list(range(len(return_list)))
-    mv_return = rl_utils.moving_average(return_list, 10)
+    mv_return = rl_utils.moving_average(return_list, 9)
     
     # 在一个窗口中绘制三个子图
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 4))
@@ -69,6 +69,7 @@ if __name__ == "__main__":
     ax3.bar(eval_episode_list, eval_rewards, alpha=0.7, color='green')
     ax3.axhline(y=sum(eval_rewards)/len(eval_rewards), color='r', linestyle='--', 
                 label=f'Mean: {sum(eval_rewards)/len(eval_rewards):.2f}')
+    ax3.set_xticks(eval_episode_list)
     ax3.set_xlabel('Evaluation Episode')
     ax3.set_ylabel('Reward')
     ax3.set_title('Evaluation Rewards')
@@ -81,7 +82,7 @@ if __name__ == "__main__":
     result_dir = './result'
     os.makedirs(result_dir, exist_ok=True)
     plt.savefig(os.path.join(result_dir, 'ac_training_evaluation.png'), dpi=300, bbox_inches='tight')
-    print(f"\Picture saved at: {os.path.join(result_dir, 'ac_training_evaluation.png')}")
+    print(f"Picture saved at: {os.path.join(result_dir, 'ac_training_evaluation.png')}")
     
     plt.show()
 
