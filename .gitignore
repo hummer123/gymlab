@@ -9,7 +9,10 @@ __pycache__/
 # claude-ai
 CLAUDE.md
 CLAUDE/
-.CLAUDE/
+.claude/
+
+.vscode/
+**/.vscode/
 
 # Distribution / packaging
 .Python
