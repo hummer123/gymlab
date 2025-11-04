@@ -54,15 +54,18 @@ class ActorCritic:
         next_states = torch.tensor(np.array(transition_dict['next_states']), dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'], dtype=torch.float).view(-1, 1).to(self.device)
 
-        # 计算目标值 - 时序差分目标
-        with torch.no_grad():
-            td_target = rewards + self.gamma * self.critic(next_states) * (1 - dones)
+        # 计算目标值 - 时序差分目标    
+        td_target = rewards + self.gamma * self.critic(next_states) * (1 - dones)
 
+        # @@@ 计算优势函数
         td_delta = td_target - self.critic(states)
+        # 优势函数归一化 - 减少方差
+        td_delta = (td_delta - td_delta.mean()) / (td_delta.std() + 1e-8)
+
         log_probs = torch.log(self.actor(states).gather(1, actions))
         actor_loss = torch.mean(-log_probs * td_delta.detach())
 
-        critic_loss = torch.mean(F.mse_loss(self.critic(states), td_target))
+        critic_loss = torch.mean(F.mse_loss(self.critic(states), td_target.detach()))
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()

@@ -68,7 +68,7 @@ def train_on_policy_agent(env, agent, num_episodes):
                     state = next_state
                     episode_reward += reward
 
-                    if done or episode_reward > 500:
+                    if done or episode_reward > 501:
                         break
 
                 all_episode_rewards.append(episode_reward)
