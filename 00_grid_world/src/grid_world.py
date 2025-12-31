@@ -36,6 +36,8 @@ class GridWorld():
         self.color_trajectory = (0, 1, 0)
         self.color_agent = (0,0,1)
 
+        self.policy_artists = []
+        self.value_texts = []
 
 
     def reset(self):
@@ -137,7 +139,11 @@ class GridWorld():
 
 
  
-    def add_policy(self, policy_matrix):                  
+    def add_policy(self, policy_matrix):
+        for _artist in self.policy_artists:
+            _artist.remove()
+        self.policy_artists = []
+
         for state, state_action_group in enumerate(policy_matrix):    
             x = state % self.env_size[0]
             y = state // self.env_size[0]
@@ -145,19 +151,28 @@ class GridWorld():
                 if action_probability !=0:
                     dx, dy = self.action_space[i]
                     if (dx, dy) != (0,0):
-                        self.ax.add_patch(patches.FancyArrow(x, y, dx=(0.1+action_probability/2)*dx, dy=(0.1+action_probability/2)*dy, color=self.color_policy, width=0.001, head_width=0.05))
+                        patch = patches.FancyArrow(x, y, dx=(0.1+action_probability/2)*dx, dy=(0.1+action_probability/2)*dy, color=self.color_policy, width=0.001, head_width=0.05)
+                        self.ax.add_patch(patch)
+                        self.policy_artists.append(patch)
                     else:
-                        self.ax.add_patch(patches.Circle((x, y), radius=0.07, facecolor=self.color_policy, edgecolor=self.color_policy, linewidth=1, fill=False))
+                        patch = patches.Circle((x, y), radius=0.07, facecolor=self.color_policy, edgecolor=self.color_policy, linewidth=1, fill=False)
+                        self.ax.add_patch(patch)
+                        self.policy_artists.append(patch)
 
     def add_state_values(self, values, precision=1):
         '''
             values: iterable
         '''
+        for text in self.value_texts:
+            text.remove()
+        self.value_texts = []
+
         values = np.round(values, precision)
         for i, value in enumerate(values):
             x = i % self.env_size[0]
             y = i // self.env_size[0]
-            self.ax.text(x, y, str(value), ha='center', va='center', fontsize=10, color='black')
+            text = self.ax.text(x, y, str(value), ha='center', va='center', fontsize=10, color='black')
+            self.value_texts.append(text)
 
     def state_index_to_xy(self, state_index):
         x = state_index % self.env_size[0]

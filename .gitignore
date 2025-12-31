@@ -10,6 +10,7 @@ __pycache__/
 CLAUDE.md
 CLAUDE/
 .claude/
+.serena/
 
 .vscode/
 **/.vscode/
