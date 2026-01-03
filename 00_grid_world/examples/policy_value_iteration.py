@@ -212,11 +212,11 @@ if __name__ == "__main__":
     state = env.reset()
     env.render()
 
-    policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    input('===> End of Policy Iteration...')
+    # policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+    # input('===> End of Policy Iteration...')
     
-    value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    input('===> End of Value Iteration...')
+    # value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+    # input('===> End of Value Iteration...')
 
     truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5)
     input('===> End of Truncated Policy Iteration...')
