@@ -19,7 +19,7 @@ parser.add_argument("--start-state", type=Union[list, tuple, np.ndarray], defaul
 parser.add_argument("--target-state", type=Union[list, tuple, np.ndarray], default=(4,4))
 
 # sepcify the forbidden states
-parser.add_argument("--forbidden-states", type=list, default=[ (2, 1), (3, 3), (1, 3)] )
+parser.add_argument("--forbidden-states", type=list, default=[ (2, 1), (3, 3), (1, 3), (4, 3)] )
 
 # sepcify the reward when reaching target
 parser.add_argument("--reward-target", type=float, default = 10)

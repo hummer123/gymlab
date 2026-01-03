@@ -34,11 +34,9 @@ def policy_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
 
     for _iter in range(max_it):
         # Policy Evaluation (iterative until convergence)
-        V = np.zeros(env.num_states)
         for _eval in range(max_it):
             delta = 0
             for s in range(env.num_states):
-                v = V[s]
                 state_xy = env.state_index_to_xy(s)
                 new_v = 0.0
                 # v_k+1 = sum_a pi(a|s) * [R_pi(a) + gamma * P_pi(a) V_k(s')] == bootstrap
@@ -47,8 +45,9 @@ def policy_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
                     next_state, reward = env._get_next_state_and_reward(state_xy, action)
                     s_next = env.xy_to_state_index(next_state)
                     new_v += pi_matrix[s, a] * (reward + gamma * V[s_next])
+
+                delta = max(delta, abs(new_v - V[s]))
                 V[s] = new_v
-                delta = max(delta, abs(v - V[s]))
             if delta < theta:
                 break
 
@@ -84,7 +83,7 @@ def policy_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
 
 def value_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
     '''
-    算法 4.1: 值迭代算法
+    值迭代算法
     '''
     n_actions = len(env.action_space)
     # 初始化: v0
@@ -94,7 +93,7 @@ def value_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
     # 当 vk 尚未收敛时
     for _iter in range(max_it):
         delta = 0.0
-        V_new = np.copy(V)
+        # 注意：这里不再需要 V_new = np.copy(V)
         
         # 对每个状态 s
         for s in range(env.num_states):
@@ -106,6 +105,8 @@ def value_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
             for a, action in enumerate(env.action_space):
                 next_state, reward = env._get_next_state_and_reward(state_xy, action)
                 s_next = env.xy_to_state_index(next_state)
+                # 关键点：这里用到的 V[s_next] 可能是本轮刚刚更新过的（如果 s_next < s），
+                # 也可能是上一轮的（如果 s_next > s）。信息的传播速度更快。
                 q_values[a] = reward + gamma * V[s_next]
             
             # 最大价值动作: ak*(s)
@@ -113,15 +114,15 @@ def value_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
             
             # 策略更新: pi_k+1
             pi_matrix[s] = np.eye(n_actions)[best_action]
-            
-            # 值更新: vk+1(s)
+
+            # 值更新: vk+1(s), v_{k+1} = max_a qk(s, a)
             v_new_s = np.max(q_values)
             delta = max(delta, abs(v_new_s - V[s]))
-            V_new[s] = v_new_s
+            
+            # 关键点：直接原地更新
+            V[s] = v_new_s
 
-        V = V_new
-
-        print(f"Iteration {_iter}:")
+        print(f"Iteration {_iter} ---> delta: {delta}")
         env.add_policy(pi_matrix)
         env.add_state_values(V)
         env.render()
@@ -133,8 +134,72 @@ def value_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
     return pi_matrix, V
 
 
+def truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=1000, eval_it=5):
+    '''
+    截断策略迭代算法 (Truncated Policy Iteration)
+    
+    与标准策略迭代的区别在于：策略评估步骤不等到完全收敛，而是固定迭代一定次数 (eval_it)。
+    这是一种介于值迭代（eval_it=1）和策略迭代（eval_it=inf）之间的方法。
 
+    :param env: 环境对象
+    :param gamma: 折扣因子
+    :param theta: 策略评估的收敛阈值
+    :param max_it: 最大迭代次数
+    :param eval_it: 策略评估阶段的最大迭代次数
+    :return: (pi_matrix, V)
+    '''
+    # stochastic policy initialization
+    stochastic_matrix = np.random.rand(env.num_states, len(env.action_space))
+    pi_matrix = stochastic_matrix / stochastic_matrix.sum(axis=1)[:, np.newaxis]
 
+    V = np.zeros(env.num_states)
+
+    for _iter in range(max_it):
+        # Policy Evaluation (Truncated)
+        for _eval in range(eval_it):
+            delta = 0
+            for s in range(env.num_states):
+                state_xy = env.state_index_to_xy(s)
+                new_v = 0.0
+                for a, action in enumerate(env.action_space):
+                    next_state, reward = env._get_next_state_and_reward(state_xy, action)
+                    s_next = env.xy_to_state_index(next_state)
+                    new_v += pi_matrix[s, a] * (reward + gamma * V[s_next])
+
+                delta = max(delta, abs(new_v - V[s]))
+                V[s] = new_v
+            
+            # 即使是截断策略迭代，如果已经收敛也可以提前退出评估
+            if delta < theta:
+                break
+
+        # Policy Improvement
+        policy_stable = True
+        for s in range(env.num_states):
+            old_action = np.argmax(pi_matrix[s])
+            action_values = np.zeros(len(env.action_space))
+            state_xy = env.state_index_to_xy(s)
+            
+            for a, action in enumerate(env.action_space):
+                next_state, reward = env._get_next_state_and_reward(state_xy, action)
+                s_next = env.xy_to_state_index(next_state)
+                action_values[a] = reward + gamma * V[s_next]
+            best_action = np.argmax(action_values)
+
+            if old_action != best_action:
+                policy_stable = False
+
+            pi_matrix[s] = np.eye(len(env.action_space))[best_action]
+
+        print(f"Iteration {_iter}:")
+        env.add_policy(pi_matrix)
+        env.add_state_values(V)
+        env.render()
+        if policy_stable:
+            print("Policy converged.")
+            break
+
+    return pi_matrix, V
 
 
 # Main function
@@ -148,8 +213,12 @@ if __name__ == "__main__":
     env.render()
 
     policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    input('### End of Policy Iteration...')
-    # value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    # input('### End of Value Iteration...')
+    input('===> End of Policy Iteration...')
+    
+    value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+    input('===> End of Value Iteration...')
+
+    truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5)
+    input('===> End of Truncated Policy Iteration...')
 
 
