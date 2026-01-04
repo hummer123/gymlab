@@ -202,6 +202,98 @@ def truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=1000, eval_it=
     return pi_matrix, V
 
 
+def mc_epsilon_greedy(env, gamma=0.9, epsilon=0.1, max_episodes=5000):
+    '''
+    MC epsilon-Greedy Algorithm
+    '''
+    # Initialization
+    # Initial policy pi_0(a|s), all (s,a) initial values q(s,a)
+    # Return(s,a) = 0 and Number(s,a) = 0 for all (s,a)
+    n_states = env.num_states
+    n_actions = len(env.action_space)
+    
+    Q = np.zeros((n_states, n_actions))
+    return_sum = np.zeros((n_states, n_actions))
+    return_count = np.zeros((n_states, n_actions))
+    
+    # Initialize policy to be epsilon-soft (uniform random is a valid start)
+    pi = np.ones((n_states, n_actions)) / n_actions
+    
+    for episode_idx in range(max_episodes):
+        # Generate episode
+        # Execute current policy, generate episode of length T
+        episode = []
+        # state, _ = env.reset()
+        # state_idx = env.xy_to_state_index(state)
+        # ==> Randomly init the starting state, increase exploration
+        state_idx = np.random.choice(env.num_states)
+        env.agent_state = env.state_index_to_xy(state_idx)
+        env.traj = [env.agent_state] 
+
+        # We assume the episode terminates. Add a safety limit.
+        step_limit = 1000
+        for _ in range(step_limit):
+            # Choose action based on policy pi
+            action_idx = np.random.choice(n_actions, p=pi[state_idx])
+            action = env.action_space[action_idx]
+
+            next_state, reward, done, _ = env.step(action)
+            episode.append((state_idx, action_idx, reward))
+            env.render(animation_interval=0.001)
+
+            if done:    
+                break
+
+            state = next_state
+            state_idx = env.xy_to_state_index(state)
+            
+        # Initialize g <- 0
+        G = 0
+        
+        # Loop for each step of episode, t = T-1, T-2, ..., 0
+        for t in range(len(episode) - 1, -1, -1):
+            s_t, a_t, r_next = episode[t]
+            
+            # g <- gamma * g + r_{t+1}
+            G = gamma * G + r_next
+            return_sum[s_t, a_t] += G
+            return_count[s_t, a_t] += 1
+            
+            # Policy Evaluation:
+            # q(s_t, a_t) <- Return(s_t, a_t) / Number(s_t, a_t)
+            Q[s_t, a_t] = return_sum[s_t, a_t] / return_count[s_t, a_t]
+            
+            # Policy Improvement:
+            # a* = argmax_a q(s_t, a)
+            best_a = np.argmax(Q[s_t])
+            
+            # Update pi(a|s_t) = {
+            #     1 - epsilon + epsilon / |A(s_t)|, if a = a*
+            #     epsilon / |A(s_t)|,               if a != a*
+            # }
+            pi[s_t, :] = epsilon / n_actions
+            pi[s_t, best_a] += 1 - epsilon
+        
+        # Visualization and logging
+        print(f"Episode {episode_idx + 1}/{max_episodes}")
+    
+    # Show the final policy to a greedy (deterministic) policy: choose the highest-probability action in each state and set other actions' probabilities to 0
+    input(f"Show the final epsilon-Greedy policy...")
+
+    env.traj = [env.agent_state] 
+    greedy_pi = np.zeros_like(pi)
+    best_actions = np.argmax(pi, axis=1)
+    greedy_pi[np.arange(n_states), best_actions] = 1.0
+    env.add_policy(greedy_pi)
+
+    # V(s) = max_a Q(s, a) for visualization
+    V = np.max(Q, axis=1)
+    env.add_state_values(V)
+    env.render(animation_interval=0.02) # Faster render during training
+
+    return pi, Q
+
+
 # Main function
 if __name__ == "__main__":
     seed = 42
@@ -218,7 +310,12 @@ if __name__ == "__main__":
     # value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
     # input('===> End of Value Iteration...')
 
-    truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5)
-    input('===> End of Truncated Policy Iteration...')
+    # truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5)
+    # input('===> End of Truncated Policy Iteration...')
+
+    # Run MC epsilon-Greedy
+    print("Starting MC epsilon-Greedy...")
+    pi, Q = mc_epsilon_greedy(env, gamma=0.9, epsilon=0.2, max_episodes=5000)
+    input('===> End of MC epsilon-Greedy...')
 
 

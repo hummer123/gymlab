@@ -24,6 +24,7 @@ class GridWorld():
         self.action_space = args.action_space          
         self.reward_target = args.reward_target
         self.reward_forbidden = args.reward_forbidden
+        self.reward_boundary = args.reward_boundary
         self.reward_step = args.reward_step
 
         self.canvas = None
@@ -69,16 +70,16 @@ class GridWorld():
         new_state = tuple(np.array(state) + np.array(action))
         if y + 1 > self.env_size[1] - 1 and action == (0,1):    # down
             y = self.env_size[1] - 1
-            reward = self.reward_forbidden  
+            reward = self.reward_boundary  
         elif x + 1 > self.env_size[0] - 1 and action == (1,0):  # right
             x = self.env_size[0] - 1
-            reward = self.reward_forbidden  
+            reward = self.reward_boundary  
         elif y - 1 < 0 and action == (0,-1):   # up
             y = 0
-            reward = self.reward_forbidden  
+            reward = self.reward_boundary  
         elif x - 1 < 0 and action == (-1, 0):  # left
             x = 0
-            reward = self.reward_forbidden 
+            reward = self.reward_boundary 
         elif new_state == self.target_state:  # stay
             x, y = self.target_state
             reward = self.reward_target
@@ -124,8 +125,8 @@ class GridWorld():
                 rect = patches.Rectangle((forbidden_state[0]-0.5, forbidden_state[1]-0.5), 1, 1, linewidth=1, edgecolor=self.color_forbid, facecolor=self.color_forbid)
                 self.ax.add_patch(rect)
 
-            self.agent_star, = self.ax.plot([], [], marker = '*', color=self.color_agent, markersize=20, linewidth=0.5) 
-            self.traj_obj, = self.ax.plot([], [], color=self.color_trajectory, linewidth=0.5)
+            self.agent_star, = self.ax.plot([], [], marker = '*', color=self.color_agent, markersize=20, linewidth=0.5, zorder=2) 
+            self.traj_obj, = self.ax.plot([], [], color=self.color_trajectory, linewidth=0.5, zorder=1)
 
         # self.agent_circle.center = (self.agent_state[0], self.agent_state[1])
         self.agent_star.set_data([self.agent_state[0]],[self.agent_state[1]])       
@@ -151,11 +152,11 @@ class GridWorld():
                 if action_probability !=0:
                     dx, dy = self.action_space[i]
                     if (dx, dy) != (0,0):
-                        patch = patches.FancyArrow(x, y, dx=(0.1+action_probability/2)*dx, dy=(0.1+action_probability/2)*dy, color=self.color_policy, width=0.001, head_width=0.05)
+                        patch = patches.FancyArrow(x, y, dx=(0.1+action_probability/2)*dx, dy=(0.1+action_probability/2)*dy, color=self.color_policy, width=0.001, head_width=0.05, zorder=3)
                         self.ax.add_patch(patch)
                         self.policy_artists.append(patch)
                     else:
-                        patch = patches.Circle((x, y), radius=0.07, facecolor=self.color_policy, edgecolor=self.color_policy, linewidth=1, fill=False)
+                        patch = patches.Circle((x, y), radius=0.07, facecolor=self.color_policy, edgecolor=self.color_policy, linewidth=1, fill=False, zorder=3)
                         self.ax.add_patch(patch)
                         self.policy_artists.append(patch)
 
@@ -171,7 +172,7 @@ class GridWorld():
         for i, value in enumerate(values):
             x = i % self.env_size[0]
             y = i // self.env_size[0]
-            text = self.ax.text(x, y, str(value), ha='center', va='center', fontsize=10, color='black')
+            text = self.ax.text(x, y, str(value), ha='center', va='center', fontsize=10, color='black', zorder=4)
             self.value_texts.append(text)
 
     def state_index_to_xy(self, state_index):
