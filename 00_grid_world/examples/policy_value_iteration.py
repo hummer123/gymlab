@@ -3,6 +3,7 @@ sys.path.append("..")
 from src.grid_world import GridWorld
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def policy_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
@@ -294,6 +295,108 @@ def mc_epsilon_greedy(env, gamma=0.9, epsilon=0.1, max_episodes=5000):
     return pi, Q
 
 
+def sarsa(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=5000, headless=True):
+    '''
+    Sarsa Algorithm Implementation
+    '''
+    n_states = env.num_states
+    n_actions = len(env.action_space)
+
+    # Initialize Q(s, a)
+    Q = np.zeros((n_states, n_actions))
+    pi = np.ones((n_states, n_actions)) / n_actions
+    
+    # 记录每回合的总奖励和回合长度
+    episode_rewards = []
+    episode_lengths = []
+    
+    for episode in range(max_episodes):
+        # ==> Randomly init the starting state, increase exploration
+        # state_idx = np.random.choice(env.num_states)
+        state_idx = 0
+        env.agent_state = env.state_index_to_xy(state_idx)
+        env.traj = [env.agent_state] 
+        
+        action_idx = np.random.choice(n_actions, p=pi[state_idx])
+        
+        done = False
+        total_reward = 0
+        step_count = 0
+        
+        while not done:
+            action = env.action_space[action_idx]
+            
+            # Take action A, observe R, S'
+            next_state, reward, done, _ = env.step(action)
+            next_state_idx = env.xy_to_state_index(next_state)
+
+            if not headless:
+                env.render(animation_interval=0.001)
+
+            total_reward += reward
+            step_count += 1
+
+            next_action_idx = np.random.choice(n_actions, p=pi[next_state_idx])
+
+            # Update Q(S, A) 
+            # Q(S, A) <- Q(S, A) + alpha * [R + gamma * Q(S', A') - Q(S, A)]
+            target = reward + gamma * Q[next_state_idx, next_action_idx]
+            Q[state_idx, action_idx] += alpha * (target - Q[state_idx, action_idx])
+
+            # Update pi(a|s_t) = {
+            #     1 - epsilon + epsilon / |A(s_t)|, if a = a*
+            #     epsilon / |A(s_t)|,               if a != a*
+            # }
+            best_a = np.argmax(Q[state_idx])
+            pi[state_idx, :] = epsilon / n_actions
+            pi[state_idx, best_a] += 1 - epsilon
+
+            state_idx = next_state_idx
+            action_idx = next_action_idx
+        
+        episode_rewards.append(total_reward)
+        episode_lengths.append(step_count)
+        print(f"Sarsa Episode {episode + 1}/{max_episodes}, Reward: {total_reward}, Length: {step_count}")
+            
+
+    print("Sarsa training finished.")
+    
+    # 绘制回合次数图
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Total reward vs Episode
+    axes[0].plot(range(max_episodes), episode_rewards, color='gray', linewidth=0.8)
+    axes[0].set_xlabel('Episode')
+    axes[0].set_ylabel('Total Reward')
+    axes[0].set_title('Sarsa Training Curve')
+    
+    # Episode length vs Episode
+    axes[1].plot(range(max_episodes), episode_lengths, color='gray', linewidth=0.8)
+    axes[1].set_xlabel('Episode')
+    axes[1].set_ylabel('Episode Length')
+    
+    plt.tight_layout()
+    plt.show()
+    # plt.savefig('../plots/sarsa_training_curve.png', dpi=150)
+    
+    # Show the final policy (Greedy)
+    greedy_pi = np.zeros_like(pi)
+    best_actions = np.argmax(pi, axis=1)
+    greedy_pi[np.arange(n_states), best_actions] = 1.0
+
+    # V(s) = max_a Q(s, a) for visualization
+    V = np.max(Q, axis=1)
+    
+    input("Press Enter to show the final Sarsa policy...")
+    env.agent_state = env.start_state
+    env.traj = [env.agent_state]
+    env.add_policy(greedy_pi)
+    env.add_state_values(V)
+    env.render()
+
+    return greedy_pi, Q
+
+
 # Main function
 if __name__ == "__main__":
     seed = 42
@@ -313,9 +416,13 @@ if __name__ == "__main__":
     # truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5)
     # input('===> End of Truncated Policy Iteration...')
 
-    # Run MC epsilon-Greedy
-    print("Starting MC epsilon-Greedy...")
-    pi, Q = mc_epsilon_greedy(env, gamma=0.9, epsilon=0.2, max_episodes=5000)
-    input('===> End of MC epsilon-Greedy...')
+    # print("Starting MC epsilon-Greedy...")
+    # pi, Q = mc_epsilon_greedy(env, gamma=0.9, epsilon=0.2, max_episodes=5000)
+    # input('===> End of MC epsilon-Greedy...')
+
+    # Run Sarsa
+    print("Starting Sarsa...")
+    pi, Q = sarsa(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
+    input('===> End of Sarsa...')
 
 
