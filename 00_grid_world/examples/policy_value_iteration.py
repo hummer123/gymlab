@@ -397,7 +397,350 @@ def sarsa(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=5000, headless=Tr
     return greedy_pi, Q
 
 
-# Main function
+
+def Q_learning_on_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=5000, headless=True):
+    '''
+    Q-Learning On-Policy (算法 7.2)
+
+    :param env: 环境对象
+    :param gamma: 折扣因子
+    :param alpha: 学习率
+    :param epsilon: 探索率
+    :param max_episodes: 最大回合数
+    :param headless: 是否无头模式（不显示动画）
+    :return: (greedy_pi, Q)
+    '''
+    n_states = env.num_states
+    n_actions = len(env.action_space)
+
+    Q = np.zeros((n_states, n_actions))
+    pi = np.ones((n_states, n_actions)) / n_actions
+    
+    # 记录每回合的总奖励和回合长度
+    episode_rewards = []
+    episode_lengths = []
+    
+    for episode in range(max_episodes):
+        state_idx = np.random.choice(env.num_states)
+        env.agent_state = env.state_index_to_xy(state_idx)
+        env.traj = [env.agent_state]
+
+        total_reward = 0
+        step_count = 0
+        done = False
+        
+        while not done:
+            # 收集经验样本：在 s_t，根据 π_t(s_t) 产生 a_t
+            action_idx = np.random.choice(n_actions, p=pi[state_idx])
+            action = env.action_space[action_idx]
+            
+            # 通过与环境互动生成 r_{t+1}, s_{t+1}
+            next_state, reward, done, _ = env.step(action)
+            next_state_idx = env.xy_to_state_index(next_state)
+            
+            if not headless:
+                env.render(animation_interval=0.001)
+            
+            total_reward += reward
+            step_count += 1
+            
+            # 更新 (s_t, a_t) 的值：
+            # q_{t+1}(s_t, a_t) = q_t(s_t, a_t) - α[q_t(s_t, a_t) - (r_{t+1} + γ max_a q_t(s_{t+1}, a))]
+            # 简化为：Q(s,a) <- Q(s,a) + α[r + γ max_a' Q(s',a') - Q(s,a)]
+            max_q_next = np.max(Q[next_state_idx])
+            td_target = reward + gamma * max_q_next
+            td_error = td_target - Q[state_idx, action_idx]
+            Q[state_idx, action_idx] = Q[state_idx, action_idx] + alpha * td_error
+            
+            # 更新 s_t 的策略（ε-Greedy）：
+            # π_{t+1}(a|s_t) = 1 - ε/|A(s_t)| * (|A(s_t)| - 1), 如果 a = argmax_a q_{t+1}(s_t, a)
+            # π_{t+1}(a|s_t) = ε/|A(s_t)|,                      如果 a ≠ argmax_a q_{t+1}(s_t, a)
+            best_a = np.argmax(Q[state_idx])
+            pi[state_idx, :] = epsilon / n_actions
+            pi[state_idx, best_a] += 1 - epsilon 
+            
+            # 转移到下一个状态
+            state_idx = next_state_idx
+        
+        episode_rewards.append(total_reward)
+        episode_lengths.append(step_count)
+        print(f"Q-Learning On-Policy Episode {episode + 1}/{max_episodes}, Reward: {total_reward}, Length: {step_count}")
+    
+    print("Q-Learning On-Policy training finished.")
+    
+    # 绘制回合次数图
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Total reward vs Episode
+    axes[0].plot(range(max_episodes), episode_rewards, color='gray', linewidth=0.8)
+    axes[0].set_xlabel('Episode')
+    axes[0].set_ylabel('Total Reward')
+    axes[0].set_title('Q-Learning On-Policy Training Curve')
+    
+    # Episode length vs Episode
+    axes[1].plot(range(max_episodes), episode_lengths, color='gray', linewidth=0.8)
+    axes[1].set_xlabel('Episode')
+    axes[1].set_ylabel('Episode Length')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # 显示最终策略（Greedy）
+    greedy_pi = np.zeros_like(pi)
+    best_actions = np.argmax(Q, axis=1)
+    greedy_pi[np.arange(n_states), best_actions] = 1.0
+    
+    # V(s) = max_a Q(s, a) for visualization
+    V = np.max(Q, axis=1)
+
+    if not headless:
+        input("Press Enter to show the final Q-Learning On-Policy policy...")
+
+    env.agent_state = env.start_state
+    env.traj = [env.agent_state]
+    env.add_policy(greedy_pi)
+    env.add_state_values(V)
+    env.render()
+    
+    return greedy_pi, Q
+
+
+def Q_learning_off_policy(env, gamma=0.9, alpha=0.1, epsilon=0.3, max_episodes=5000, headless=True):
+    '''
+    Q-Learning Off-Policy (算法 7.3)
+    
+    Off-policy 的核心思想是使用行为策略 π_b 来生成经验数据，
+    同时学习目标策略 π_T（最优策略）。
+    
+    :param env: 环境对象
+    :param gamma: 折扣因子
+    :param alpha: 学习率 α > 0
+    :param epsilon: 行为策略的探索率（用于 ε-greedy 行为策略）
+    :param max_episodes: 最大回合数
+    :param headless: 是否无头模式（不显示动画）
+    :return: (pi_T, Q) - 目标策略和 Q 值表
+    '''
+    n_states = env.num_states
+    n_actions = len(env.action_space)
+    Q = np.zeros((n_states, n_actions))
+
+    # 行为策略 π_b(a|s)：使用 ε-greedy 策略来保证探索
+    # 这里初始化为均匀随机策略
+    pi_b = np.ones((n_states, n_actions)) / n_actions
+    
+    # 目标策略 π_T(a|s)：初始化为均匀策略，后续会更新为贪婪策略
+    pi_T = np.ones((n_states, n_actions)) / n_actions
+    
+    # 记录每回合的总奖励和回合长度
+    episode_rewards = []
+    episode_lengths = []
+    
+    for episode in range(max_episodes):
+        # 随机初始化起始状态，增加探索
+        state_idx = np.random.choice(env.num_states)
+        env.agent_state = env.state_index_to_xy(state_idx)
+        env.traj = [env.agent_state]
+        
+        total_reward = 0
+        step_count = 0
+        done = False
+        
+        # 对 π_b 生成的每个回合 {s_0, a_0, r_1, s_1, a_1, r_2, ...}
+        while not done:
+            # 使用行为策略 π_b 选择动作（ε-greedy）
+            action_idx = np.random.choice(n_actions, p=pi_b[state_idx])
+            action = env.action_space[action_idx]
+            
+            # 与环境交互，获得 r_{t+1}, s_{t+1}
+            next_state, reward, done, _ = env.step(action)
+            next_state_idx = env.xy_to_state_index(next_state)
+            
+            if not headless:
+                env.render(animation_interval=0.001)
+            
+            total_reward += reward
+            step_count += 1
+            
+            # 对回合中的每一步 t = 0, 1, 2, ...
+            # 更新 (s_t, a_t) 的值：
+            # q_{t+1}(s_t, a_t) = q_t(s_t, a_t) - α_t(s_t, a_t) * [q_t(s_t, a_t) - (r_{t+1} + γ max_a q_t(s_{t+1}, a))]
+            # 等价于：Q(s,a) <- Q(s,a) + α * [r + γ max_a' Q(s',a') - Q(s,a)]
+            max_q_next = np.max(Q[next_state_idx])
+            td_target = reward + gamma * max_q_next
+            td_error = td_target - Q[state_idx, action_idx]
+            Q[state_idx, action_idx] = Q[state_idx, action_idx] + alpha * td_error
+            
+            # 更新 s_t 的目标策略 π_T：
+            # π_{T,t+1}(a|s_t) = 1, 如果 a = argmax_a q_{t+1}(s_t, a)
+            # π_{T,t+1}(a|s_t) = 0, 如果 a ≠ argmax_a q_{t+1}(s_t, a)
+            best_a = np.argmax(Q[state_idx])
+            pi_T[state_idx, :] = 0
+            pi_T[state_idx, best_a] = 1.0
+            
+            # 更新行为策略 π_b（保持 ε-greedy 以继续探索）
+            pi_b[state_idx, :] = epsilon / n_actions
+            pi_b[state_idx, best_a] += 1 - epsilon
+            
+            # 转移到下一个状态
+            state_idx = next_state_idx
+        
+        episode_rewards.append(total_reward)
+        episode_lengths.append(step_count)
+        print(f"Q-Learning Off-Policy Episode {episode + 1}/{max_episodes}, Reward: {total_reward}, Length: {step_count}")
+    
+    print("Q-Learning Off-Policy training finished.")
+    
+    # 绘制训练曲线
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Total reward vs Episode
+    axes[0].plot(range(max_episodes), episode_rewards, color='gray', linewidth=0.8)
+    axes[0].set_xlabel('Episode')
+    axes[0].set_ylabel('Total Reward')
+    axes[0].set_title('Q-Learning Off-Policy Training Curve')
+    
+    # Episode length vs Episode
+    axes[1].plot(range(max_episodes), episode_lengths, color='gray', linewidth=0.8)
+    axes[1].set_xlabel('Episode')
+    axes[1].set_ylabel('Episode Length')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # 显示最终目标策略 π_T（已经是确定性贪婪策略）
+    V = np.max(Q, axis=1)
+    
+    if not headless:
+        input("Press Enter to show the final Q-Learning Off-Policy target policy...")
+    
+    env.agent_state = env.start_state
+    env.traj = [env.agent_state]
+    env.add_policy(pi_T)
+    env.add_state_values(V)
+    env.render()
+    
+    return pi_T, Q
+
+
+
+def Q_learning_off_policy_average(env, gamma=0.9, alpha=0.1, epsilon=0.3, max_episodes=5000, headless=True):
+    '''
+    Q-Learning Off-Policy (算法 7.3)
+    
+    Off-policy 的核心思想是使用行为策略 π_b 来生成经验数据，
+    同时学习目标策略 π_T（最优策略）。
+    
+    :param env: 环境对象
+    :param gamma: 折扣因子
+    :param alpha: 学习率 α > 0
+    :param epsilon: 行为策略的探索率（用于随机行为策略）
+    :param max_episodes: 最大回合数
+    :param headless: 是否无头模式（不显示动画）
+    :return: (pi_T, Q) - 目标策略和 Q 值表
+    '''
+    n_states = env.num_states
+    n_actions = len(env.action_space)
+    Q = np.zeros((n_states, n_actions))
+
+    # 行为策略 π_b(a|s)：使用 ε-greedy 策略来保证探索
+    # 这里初始化为均匀随机策略
+    pi_b = np.ones((n_states, n_actions)) / n_actions
+    
+    # 目标策略 π_T(a|s)：初始化为均匀策略，后续会更新为贪婪策略
+    pi_T = np.ones((n_states, n_actions)) / n_actions
+    
+    # 记录每回合的总奖励和回合长度
+    episode_rewards = []
+    episode_lengths = []
+    
+    for episode in range(max_episodes):
+        # 随机初始化起始状态，增加探索
+        state_idx = np.random.choice(env.num_states)
+        env.agent_state = env.state_index_to_xy(state_idx)
+        env.traj = [env.agent_state]
+        
+        total_reward = 0
+        step_count = 0
+        done = False
+        
+        # 对 π_b 生成的每个回合 {s_0, a_0, r_1, s_1, a_1, r_2, ...}
+        while not done:
+            # 使用行为策略 π_b 选择动作（ε-greedy）
+            action_idx = np.random.choice(n_actions, p=pi_b[state_idx])
+            action = env.action_space[action_idx]
+            
+            # 与环境交互，获得 r_{t+1}, s_{t+1}
+            next_state, reward, done, _ = env.step(action)
+            next_state_idx = env.xy_to_state_index(next_state)
+            
+            if not headless:
+                env.render(animation_interval=0.001)
+            
+            total_reward += reward
+            step_count += 1
+            
+            # 对回合中的每一步 t = 0, 1, 2, ...
+            # 更新 (s_t, a_t) 的值：
+            # q_{t+1}(s_t, a_t) = q_t(s_t, a_t) - α_t(s_t, a_t) * [q_t(s_t, a_t) - (r_{t+1} + γ max_a q_t(s_{t+1}, a))]
+            # 等价于：Q(s,a) <- Q(s,a) + α * [r + γ max_a' Q(s',a') - Q(s,a)]
+            max_q_next = np.max(Q[next_state_idx])
+            td_target = reward + gamma * max_q_next
+            td_error = td_target - Q[state_idx, action_idx]
+            Q[state_idx, action_idx] = Q[state_idx, action_idx] + alpha * td_error
+            
+            # 更新 s_t 的目标策略 π_T：
+            # π_{T,t+1}(a|s_t) = 1, 如果 a = argmax_a q_{t+1}(s_t, a)
+            # π_{T,t+1}(a|s_t) = 0, 如果 a ≠ argmax_a q_{t+1}(s_t, a)
+            best_a = np.argmax(Q[state_idx])
+            pi_T[state_idx, :] = 0
+            pi_T[state_idx, best_a] = 1.0
+            
+            # 转移到下一个状态
+            state_idx = next_state_idx
+        
+        episode_rewards.append(total_reward)
+        episode_lengths.append(step_count)
+        print(f"Q-Learning Off-Policy Episode {episode + 1}/{max_episodes}, Reward: {total_reward}, Length: {step_count}")
+    
+    print("Q-Learning Off-Policy training finished.")
+    
+    # 绘制训练曲线
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Total reward vs Episode
+    axes[0].plot(range(max_episodes), episode_rewards, color='gray', linewidth=0.8)
+    axes[0].set_xlabel('Episode')
+    axes[0].set_ylabel('Total Reward')
+    axes[0].set_title('Q-Learning Off-Policy Training Curve')
+    
+    # Episode length vs Episode
+    axes[1].plot(range(max_episodes), episode_lengths, color='gray', linewidth=0.8)
+    axes[1].set_xlabel('Episode')
+    axes[1].set_ylabel('Episode Length')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # 显示最终目标策略 π_T（已经是确定性贪婪策略）
+    V = np.max(Q, axis=1)
+    
+    if not headless:
+        input("Press Enter to show the final Q-Learning Off-Policy target policy...")
+    
+    env.agent_state = env.start_state
+    env.traj = [env.agent_state]
+    env.add_policy(pi_T)
+    env.add_state_values(V)
+    env.render()
+    
+    return pi_T, Q
+
+
+
+
+
+
+####### Main function #######
 if __name__ == "__main__":
     seed = 42
     random.seed(seed)
@@ -407,8 +750,8 @@ if __name__ == "__main__":
     state = env.reset()
     env.render()
 
-    # policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    # input('===> End of Policy Iteration...')
+    policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+    input('===> End of Policy Iteration...')
     
     # value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
     # input('===> End of Value Iteration...')
@@ -420,9 +763,18 @@ if __name__ == "__main__":
     # pi, Q = mc_epsilon_greedy(env, gamma=0.9, epsilon=0.2, max_episodes=5000)
     # input('===> End of MC epsilon-Greedy...')
 
-    # Run Sarsa
-    print("Starting Sarsa...")
-    pi, Q = sarsa(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
-    input('===> End of Sarsa...')
+    # print("Starting Sarsa...")
+    # pi, Q = sarsa(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
+    # input('===> End of Sarsa...')
 
+    # print("Starting Q-Learning On-Policy...")
+    # Q_learning_on_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
+    # input('===> End of Q-Learning On-Policy...')
 
+    print("Starting Q-Learning Off-Policy...")
+    Q_learning_off_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
+    input('===> End of Q-Learning Off-Policy...')
+
+    print("Starting Q-Learning Off-Policy for AGV...")
+    Q_learning_off_policy_average(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
+    input('===> End of Q-Learning Off-Policy for AGV...')
