@@ -750,11 +750,11 @@ if __name__ == "__main__":
     state = env.reset()
     env.render()
 
-    policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    input('===> End of Policy Iteration...')
+    # policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+    # input('===> End of Policy Iteration...')
     
-    # value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    # input('===> End of Value Iteration...')
+    value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+    input('===> End of Value Iteration...')
 
     # truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5)
     # input('===> End of Truncated Policy Iteration...')
@@ -771,10 +771,10 @@ if __name__ == "__main__":
     # Q_learning_on_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
     # input('===> End of Q-Learning On-Policy...')
 
-    print("Starting Q-Learning Off-Policy...")
-    Q_learning_off_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
-    input('===> End of Q-Learning Off-Policy...')
+    # print("Starting Q-Learning Off-Policy...")
+    # Q_learning_off_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
+    # input('===> End of Q-Learning Off-Policy...')
 
-    print("Starting Q-Learning Off-Policy for AGV...")
-    Q_learning_off_policy_average(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
-    input('===> End of Q-Learning Off-Policy for AGV...')
+    # print("Starting Q-Learning Off-Policy for AGV...")
+    # Q_learning_off_policy_average(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
+    # input('===> End of Q-Learning Off-Policy for AGV...')
