@@ -1,33 +1,37 @@
+from tqdm import tqdm
 import numpy as np
+import torch 
+import collections
+import random
 
 
 
-class CartPole_Discretizer:
-    def __init__(self, params):
-        self.cart_pos_num = params['cart_pos_num']
-        self.cart_v_num = params['cart_v_num']
-        self.pole_angle_num = params['pole_angle_num']
-        self.pole_v_num = params['pole_v_num']
 
-        self.cart_pos_bins = np.linspace(-2.4, 2.4, self.cart_pos_num + 1)[1:-1]
-        self.cart_v_bins = np.linspace(-3, 3, self.cart_v_num + 1)[1:-1]
-        self.pole_angle_bins = np.linspace(-0.5, 0.5, self.pole_angle_num + 1)[1:-1]
-        self.pole_v_bins = np.linspace(-3, 3, self.pole_v_num + 1)[1:-1]
+class ReplayBuffer:
+    def __init__(self, capacity):
+        self.buffer = collections.deque(maxlen=capacity)
 
-    def __call__(self, observation):
-        cart_pos, cart_v, pole_angle, pole_v = observation
+    def add(self, state, action, reward, next_state, done):
+        self.buffer.append((state, action, reward, next_state, done))
 
-        cart_pos_discrete = np.digitize(cart_pos, self.cart_pos_bins)
-        cart_v_discrete = np.digitize(cart_v, self.cart_v_bins)
-        pole_angle_discrete = np.digitize(pole_angle, self.pole_angle_bins)
-        pole_v_discrete = np.digitize(pole_v, self.pole_v_bins)
+    def sample(self, batch_size):
+        transtions = random.sample(self.buffer, batch_size)
+        state, action, reward, next_state, done = zip(*transtions)
+        return np.array(state), action, reward, np.array(next_state), done
 
-        # merge to a single discrete state
-        cur_state = cart_pos_discrete
-        cur_state = cur_state * self.cart_v_num + cart_v_discrete
-        cur_state = cur_state * self.pole_angle_num + pole_angle_discrete
-        cur_state = cur_state * self.pole_v_num + pole_v_discrete
+    def __len__(self):
+        return len(self.buffer)
 
-        return cur_state
+
+def moving_average(data, window_size):
+    cumsum = np.cumsum(np.insert(data, 0, 0)) 
+    moving_aves = (cumsum[window_size:] - cumsum[:-window_size]) / window_size
+    r = np.arange(1, window_size - 1, 2)
+    begin = np.cumsum(data[:window_size -1])[::2] / r
+    end = (np.cumsum(data[:-window_size:-1])[::2] / r)[::-1]
+    moving_aves = np.concatenate((begin, moving_aves, end))
+    return moving_aves
+
+
 
 
