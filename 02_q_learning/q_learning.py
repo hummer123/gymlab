@@ -137,6 +137,9 @@ def show_agent(env, agent, discretizer, max_steps=400):
     total_reward = 0
     done = False
 
+    old_epsilon = agent.epsilon
+    agent.epsilon = 0.0
+
     for i_step in range(max_steps):
         env.render()
         action = agent.choose_action(state)
@@ -149,6 +152,8 @@ def show_agent(env, agent, discretizer, max_steps=400):
 
         if done:
             break
+
+    agent.epsilon = old_epsilon
 
     print(f"Total Reward: {total_reward}")
     print(f"This agent table shape: {agent.q_table.shape}")

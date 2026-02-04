@@ -24,13 +24,8 @@ class ReplayBuffer:
 
 
 def moving_average(data, window_size):
-    cumsum = np.cumsum(np.insert(data, 0, 0)) 
-    moving_aves = (cumsum[window_size:] - cumsum[:-window_size]) / window_size
-    r = np.arange(1, window_size - 1, 2)
-    begin = np.cumsum(data[:window_size -1])[::2] / r
-    end = (np.cumsum(data[:-window_size:-1])[::2] / r)[::-1]
-    moving_aves = np.concatenate((begin, moving_aves, end))
-    return moving_aves
+    weights = np.ones(window_size) / window_size
+    return np.convolve(data, weights, mode='same')
 
 
 
