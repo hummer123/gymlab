@@ -1,4 +1,5 @@
 import random
+import os
 import gymnasium as gym
 import numpy as np
 from tqdm import tqdm
@@ -71,7 +72,8 @@ class DQNAgent:
         # 均方误差损失函数 
         # 最小化目标损失 L = 1/n * Σ(y - Q(s, a))^2
         # 也叫优势函数 A(s, a) = Q(s, a) - V(s)
-        loss = torch.mean(F.mse_loss(q_values, target_q_values))
+        # loss = torch.mean(F.mse_loss(q_values, target_q_values))
+        loss = F.mse_loss(q_values, target_q_values)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -79,11 +81,48 @@ class DQNAgent:
         self.learn_step_counter += 1
         if self.learn_step_counter % self.target_update_freq == 0:
             self.target_q_network.load_state_dict(self.q_network.state_dict())
+    
+    def save_model(self, path):
+        torch.save(self.q_network.state_dict(), path)
 
+    def load_model(self, path):
+        self.q_network.load_state_dict(torch.load(path, weights_only=True))
+
+
+def evaluate_agent(env, agent, n_episodes=1, render=False):
+    """
+    评估智能体 (Evaluate Agent)
+    :param env: 环境
+    :param agent: 智能体
+    :param n_episodes: 评估的回合数
+    :param render: 是否渲染画面
+    :return: 平均回报
+    """
+    old_epsilon = agent.epsilon
+    agent.epsilon = 0.0  # 暂时关闭探索
+    
+    rewards = []
+    for _ in range(n_episodes):
+        state, _ = env.reset()
+        episode_reward = 0
+        done = False
+        while not done:
+            if render:
+                env.render()
+            action = agent.take_action(state)
+            next_state, reward, terminated, truncated, _ = env.step(action)
+            done = terminated or truncated
+            episode_reward += reward
+            state = next_state
+        rewards.append(episode_reward)
+    
+    agent.epsilon = old_epsilon  # 恢复探索率
+    return np.mean(rewards)
 
 
 def train_dqn(env, agent, replay_buffer, num_episodes, batch_size, minim_buffer_size):
     return_list = []
+    best_eval_reward = -float('inf')
 
     epsilon_start = 0.98
     epsilon_end = 0.01
@@ -121,7 +160,7 @@ def train_dqn(env, agent, replay_buffer, num_episodes, batch_size, minim_buffer_
                     
                     # 综合奖励，保持原有生存奖励 1.0 的基础
                     train_reward = reward + r_pos + r_ang + r_vel
-                    
+
                     replay_buffer.add(state, action, train_reward, next_state, done)
                     state = next_state
                     episode_reward += reward
@@ -136,40 +175,31 @@ def train_dqn(env, agent, replay_buffer, num_episodes, batch_size, minim_buffer_
                             'dones': b_d
                         }
                         agent.update(transition_dict)
+
+                    if done:
+                        break
+                
                 return_list.append(episode_reward)
                 pbar.update(1)
                 if (i_episode + 1) % 50 == 0:
+                    # -------------- Evaluation Phase --------------
+                    # 使用独立的评估函数进行评估 (Use independent evaluation function)
+                    mean_eval_reward = evaluate_agent(env, agent, n_episodes=3, render=False)
+                    
+                    # 保存最佳模型 (Save the Best Model)
+                    if mean_eval_reward > best_eval_reward:
+                        best_eval_reward = mean_eval_reward
+                        agent.save_model('best_dqn_model.pth')
+                    # ----------------------------------------------
+
                     avg_reward = np.mean(return_list[-10:])
-                    pbar.set_postfix({'Episode': f'{(i * (num_episodes // 10)) + i_episode + 1}',
-                                      'Avg Reward': f'{avg_reward:.3f}'})
+                    pbar.set_postfix({
+                        'Episode': f'{(i * (num_episodes // 10)) + i_episode + 1}',
+                        'Avg': f'{avg_reward:.3f}',
+                        'Eval': f'{mean_eval_reward:.1f}',
+                        'Best': f'{best_eval_reward:.1f}'
+                    })
     return return_list
-
-
-
-def show_agent(env, agent, max_steps=400):
-    # Set epsilon to 0 for evaluation to ensure deterministic behavior
-    old_epsilon = agent.epsilon
-    agent.epsilon = 0.0
-    
-    state, _ = env.reset()
-    total_reward = 0
-    done = False
-    
-    for i_step in range(max_steps):
-        env.render()
-        action = agent.take_action(state)
-        next_state, reward, terminated, truncated, _ = env.step(action)
-        done = terminated or truncated
-
-        state = next_state
-        total_reward += reward
-
-        if done:
-            break
-            
-    # Restore epsilon (good practice, though not strictly needed here)
-    agent.epsilon = old_epsilon
-    print(f"Total Reward: {total_reward}")
 
 ##------------------------------##
 
@@ -229,9 +259,16 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
+    # -------------------------------------------------------------
+    # Load the theoretically best model saved during the evaluation phase
+    if os.path.exists('best_dqn_model.pth'):
+        agent.load_model('best_dqn_model.pth')
+        print("Loaded best model for evaluation/inference (Scholar's recommendation).")
+    # -------------------------------------------------------------
+
     show_env = gym.make('CartPole-v1', render_mode='human')
-    show_agent(show_env, agent, max_steps=400)
+    evaluate_agent(show_env, agent, n_episodes=1, render=True)
     show_env.close()
 
-    
+
 
