@@ -49,7 +49,9 @@ def policy_iteration(env, gamma=0.9, theta=1e-6, max_it=1000):
 
                 delta = max(delta, abs(new_v - V[s]))
                 V[s] = new_v
+
             if delta < theta:
+                print(f"Policy evaluation after break in {_iter} -> {_eval}.")
                 break
 
         # Policy Improvement
@@ -750,31 +752,54 @@ if __name__ == "__main__":
     state = env.reset()
     env.render()
 
-    # policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    # input('===> End of Policy Iteration...')
-    
-    value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
-    input('===> End of Value Iteration...')
+    while True:
+        print("\n请选择要运行的算法：")
+        print("1. Policy Iteration")
+        print("2. Value Iteration")
+        print("3. Truncated Policy Iteration")
+        print("4. MC epsilon-Greedy")
+        print("5. Sarsa")
+        print("6. Q-Learning On-Policy")
+        print("7. Q-Learning Off-Policy")
+        print("8. Q-Learning Off-Policy Average")
+        print("0 或 q. 退出")
 
-    # truncated_policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5)
-    # input('===> End of Truncated Policy Iteration...')
+        choice = input("请输入选项编号: ").strip()
+        if choice.lower() in {"0", "q"}:
+            print("程序结束。")
+            break
 
-    # print("Starting MC epsilon-Greedy...")
-    # pi, Q = mc_epsilon_greedy(env, gamma=0.9, epsilon=0.2, max_episodes=5000)
-    # input('===> End of MC epsilon-Greedy...')
+        env.reset()
+        if choice == "1":
+            policy_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+        elif choice == "2":
+            value_iteration(env, gamma=0.9, theta=1e-6, max_it=100)
+        elif choice == "3":
+            truncated_policy_iteration(
+                env, gamma=0.9, theta=1e-6, max_it=100, eval_it=5
+            )
+        elif choice == "4":
+            mc_epsilon_greedy(
+                env, gamma=0.9, epsilon=0.2, max_episodes=5000
+            )
+        elif choice == "5":
+            sarsa(
+                env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500
+            )
+        elif choice == "6":
+            Q_learning_on_policy(
+                env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500
+            )
+        elif choice == "7":
+            Q_learning_off_policy(
+                env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500
+            )
+        elif choice == "8":
+            Q_learning_off_policy_average(
+                env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500
+            )
+        else:
+            print("无效选项，请输入 0 到 8，或输入 q 退出。")
+            continue
 
-    # print("Starting Sarsa...")
-    # pi, Q = sarsa(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
-    # input('===> End of Sarsa...')
-
-    # print("Starting Q-Learning On-Policy...")
-    # Q_learning_on_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
-    # input('===> End of Q-Learning On-Policy...')
-
-    # print("Starting Q-Learning Off-Policy...")
-    # Q_learning_off_policy(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
-    # input('===> End of Q-Learning Off-Policy...')
-
-    # print("Starting Q-Learning Off-Policy for AGV...")
-    # Q_learning_off_policy_average(env, gamma=0.9, alpha=0.1, epsilon=0.1, max_episodes=500)
-    # input('===> End of Q-Learning Off-Policy for AGV...')
+        input("算法运行结束，按 Enter 返回算法菜单...")
